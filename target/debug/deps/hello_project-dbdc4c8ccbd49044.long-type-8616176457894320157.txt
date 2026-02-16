@@ -1,0 +1,1 @@
+std::iter::Take<Map<WavSamples<'_, BufReader<File>, i16>, {closure@src/main.rs:49:14: 49:17}>>
