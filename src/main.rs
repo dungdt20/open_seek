@@ -75,6 +75,11 @@ fn main() -> std::io::Result<()> {
     
     println!("Success LPF! Samples: {}", processed.len());
 
+    // Now pass to your windower
+    let windowed = apply_hamming(processed);
+    
+    println!("Success Hamming! Samples: {}", windowed.len());
+
     Ok(())
 }
 
@@ -101,4 +106,17 @@ fn process_audio(samples: Vec<f32>, original_rate: u32) -> Vec<f32> {
 
     let downsampled = filtered.into_iter().step_by(skip_factor as usize).collect();
     downsampled
+}
+
+fn apply_hamming(frame: Vec<f32>) -> Vec<f32> {
+    let n = frame.len() as f32;
+    
+    frame
+        .into_iter()
+        .enumerate()
+        .map(|(i, x)| {
+            let multiplier = 0.54 - 0.46 * (2.0 * std::f32::consts::PI * i as f32 / (n - 1.0)).cos();
+            x * multiplier
+        })
+        .collect()
 }
