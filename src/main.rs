@@ -1,5 +1,37 @@
 use std::{fs::File, process::Command};
 use std::io::{Read};
+use std::f32::consts::PI;
+
+#[derive(Debug, Clone, Copy)]
+struct Complex {
+    re: f32,
+    im: f32,
+}
+
+impl Complex {
+    fn from_re(re: f32) -> Self {
+        Complex { re, im: 0.0 }
+    }
+
+    fn add(self, other: Complex) -> Complex {
+        Complex { re: self.re + other.re, im: self.im + other.im }
+    }
+
+    fn sub(self, other: Complex) -> Complex {
+        Complex { re: self.re - other.re, im: self.im - other.im }
+    }
+
+    fn mul(self, other: Complex) -> Complex {
+        Complex {
+            re: self.re * other.re - self.im * other.im,
+            im: self.re * other.im + self.im * other.re,
+        }
+    }
+
+    fn norm(&self) -> f32 {
+        (self.re * self.re + self.im * self.im).sqrt()
+    }
+}
 
 fn main() -> std::io::Result<()> {
     // let youtube_url = "https://www.youtube.com/watch?v=SEFIsuiDTm8&list=RDSEFIsuiDTm8";
@@ -80,6 +112,9 @@ fn main() -> std::io::Result<()> {
     
     println!("Success Hamming! Samples: {}", windowed.len());
 
+    let output = raw_fft(windowed);
+    println!("Success FFT! Samples: {}", output.len());
+
     Ok(())
 }
 
@@ -90,7 +125,7 @@ fn process_audio(samples: Vec<f32>, original_rate: u32) -> Vec<f32> {
     // 1. Simple Low Pass Filter (IIR) to avoid aliasing
     // RC filter math: alpha = dt / (RC + dt)
     let dt = 1.0 / original_rate as f32;
-    let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff);
+    let rc = 1.0 / (2.0 * PI * cutoff);
     let alpha = dt / (rc + dt);
 
     let mut filtered = Vec::with_capacity(samples.len());
@@ -119,4 +154,39 @@ fn apply_hamming(frame: Vec<f32>) -> Vec<f32> {
             x * multiplier
         })
         .collect()
+}
+
+pub fn raw_fft(input: Vec<f32>) -> Vec<f32> {
+    let n = input.len();
+    let mut data: Vec<Complex> = input.into_iter().map(Complex::from_re).collect();
+    
+    fn fft_recursive(buffer: &mut [Complex]) {
+        let n = buffer.len();
+        if n <= 1 { return; }
+
+        // 1. Split into even and odd indices
+        let mut even: Vec<Complex> = buffer.iter().step_by(2).copied().collect();
+        let mut odd: Vec<Complex> = buffer.iter().skip(1).step_by(2).copied().collect();
+
+        // 2. Recurse
+        fft_recursive(&mut even);
+        fft_recursive(&mut odd);
+
+        // 3. Combine using the "Butterfly" operation
+        for k in 0..n / 2 {
+            let angle = -2.0 * PI * (k as f32) / (n as f32);
+            let t = Complex {
+                re: angle.cos(),
+                im: angle.sin(),
+            }.mul(odd[k]);
+
+            buffer[k] = even[k].add(t);
+            buffer[k + n / 2] = even[k].sub(t);
+        }
+    }
+
+    fft_recursive(&mut data);
+
+    // Return magnitude of the first half (Nyquist)
+    data.iter().take(n / 2).map(|c| c.norm()).collect()
 }
